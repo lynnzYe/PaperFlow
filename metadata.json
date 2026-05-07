@@ -1,0 +1,6 @@
+{
+  "name": "Paper Flow",
+  "description": "Bibilography Management Web App. Import/export bibtex, url, meta etc.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
