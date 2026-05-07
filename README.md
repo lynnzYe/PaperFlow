@@ -23,3 +23,6 @@ npm install
 ```bash
 npm run dev
 ```
+## 4. Start using PaperFlow
+
+Visit http://localhost:3000/
