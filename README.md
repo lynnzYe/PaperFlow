@@ -26,3 +26,12 @@ npm run dev
 ## 4. Start using PaperFlow
 
 Visit http://localhost:3000/
+
+# Local Deployment Using PM2
+1. `pm2 delete all`
+2. `pm2 start "npx tsx server.ts" --name paperflow`
+3. `pm2 save`
+
+Helpful commands:
+- `pm2 logs`
+- `pm2 list`
