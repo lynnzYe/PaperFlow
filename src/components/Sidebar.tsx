@@ -20,11 +20,14 @@ import {
   Plus,
   MoreVertical,
   Pencil,
-  Trash
+  Tags,
+  Calendar
 } from 'lucide-react';
-import { api, Folder } from '@/src/db';
+import { api, Folder, Paper } from '@/src/db';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { 
   DropdownMenu, 
@@ -46,13 +49,14 @@ import {
 } from "@/components/ui/alert-dialog"
 
 interface AppSidebarProps {
-  onFilterChange: (filter: { type: 'all' | 'starred' | 'trash' | 'folder', folderId?: number }) => void;
+  onFilterChange: (filter: { type: 'all' | 'starred' | 'trash' | 'folder' | 'tag' | 'year', folderId?: number, searchValue?: string }) => void;
   activeFilter: string;
   folders: Folder[];
+  papers: Paper[];
   onRefresh: () => void;
 }
 
-export function AppSidebar({ onFilterChange, activeFilter, folders, onRefresh }: AppSidebarProps) {
+export function AppSidebar({ onFilterChange, activeFilter, folders, papers, onRefresh }: AppSidebarProps) {
   const [newFolderDialogOpen, setNewFolderDialogOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
   
@@ -106,6 +110,9 @@ export function AppSidebar({ onFilterChange, activeFilter, folders, onRefresh }:
       toast.error('Failed to rename folder');
     }
   };
+
+  const allTags = Array.from(new Set(papers.flatMap(p => p.tags || []))).sort();
+  const allYears = Array.from(new Set(papers.map(p => p.year).filter(Boolean) as number[])).sort((a, b) => b - a);
 
   const handleDeleteFolder = async () => {
     if (!deleteFolder) return;
@@ -210,11 +217,54 @@ export function AppSidebar({ onFilterChange, activeFilter, folders, onRefresh }:
                           className="text-destructive"
                           onClick={() => setDeleteFolder(folder)}
                         >
-                          <Trash className="mr-2 h-3.5 w-3.5" /> Delete
+                          <Trash2 className="mr-2 h-3.5 w-3.5" /> Delete
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel>Tags</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <ScrollArea className="h-40 px-3">
+              <div className="flex flex-wrap gap-1 py-1">
+                {allTags.length > 0 ? (
+                  allTags.map(tag => (
+                    <Badge 
+                      key={tag} 
+                      variant={activeFilter === `tag-${tag}` ? 'default' : 'outline'}
+                      className="cursor-pointer hover:bg-primary/10 transition-colors"
+                      onClick={() => onFilterChange({ type: 'tag', searchValue: tag })}
+                    >
+                      {tag}
+                    </Badge>
+                  ))
+                ) : (
+                  <span className="text-xs text-muted-foreground px-1 italic">No tags yet</span>
+                )}
+              </div>
+            </ScrollArea>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel>Years</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {allYears.map(year => (
+                <SidebarMenuItem key={year}>
+                  <SidebarMenuButton 
+                    isActive={activeFilter === `year-${year}`}
+                    onClick={() => onFilterChange({ type: 'year', searchValue: year.toString() })}
+                  >
+                    <Calendar className="mr-2 h-4 w-4" />
+                    <span>{year}</span>
+                  </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
             </SidebarMenu>

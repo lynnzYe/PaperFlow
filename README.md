@@ -35,3 +35,4 @@ Visit http://localhost:3000/
 Helpful commands:
 - `pm2 logs`
 - `pm2 list`
+- `pm2 stop ...`

@@ -4,21 +4,24 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { Loader2, Link as LinkIcon, FileText } from 'lucide-react';
-import { api } from '@/src/db';
+import { Loader2, Link as LinkIcon, FileText, Tags } from 'lucide-react';
+import { api, Paper } from '@/src/db';
 import bibtexParse from 'bibtex-parse-js';
+import { TagInput } from './TagInput';
 
 interface PasteModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   folderId?: number;
+  allPapers: Paper[];
   onRefresh: () => void;
 }
 
-export function PasteModal({ open, onOpenChange, folderId, onRefresh }: PasteModalProps) {
+export function PasteModal({ open, onOpenChange, folderId, allPapers, onRefresh }: PasteModalProps) {
   const [url, setUrl] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [extractedData, setExtractedData] = useState<any>(null);
+  const allExistingTags = Array.from(new Set(allPapers.flatMap(p => p.tags || []))).sort();
   
   useHotkeys('mod+enter', () => {
     if (open) {
@@ -276,6 +279,30 @@ export function PasteModal({ open, onOpenChange, folderId, onRefresh }: PasteMod
                 onChange={(e) => setExtractedData({...extractedData, conference: e.target.value})}
                 className="mt-1"
               />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground uppercase flex items-center gap-2">
+                <Tags className="h-3 w-3" /> Tags
+              </label>
+              <div className="mt-2 bg-background p-2 rounded-md border">
+                <TagInput 
+                  tags={extractedData.tags || []}
+                  allExistingTags={allExistingTags}
+                  onAddTag={(tag) => {
+                    const currentTags = extractedData.tags || [];
+                    if (!currentTags.includes(tag)) {
+                      setExtractedData({ ...extractedData, tags: [...currentTags, tag] });
+                    }
+                  }}
+                  onRemoveTag={(tag) => {
+                    setExtractedData({
+                      ...extractedData,
+                      tags: (extractedData.tags || []).filter((t: string) => t !== tag)
+                    });
+                  }}
+                  placeholder="Categorize this paper..."
+                />
+              </div>
             </div>
           </div>
         )}

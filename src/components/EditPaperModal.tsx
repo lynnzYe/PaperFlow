@@ -7,20 +7,21 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { api, Paper, Folder } from '@/src/db';
 import { toast } from 'sonner';
-import { X, Plus } from 'lucide-react';
+import { X, Plus, Tags } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { TagInput } from './TagInput';
 
 interface EditPaperModalProps {
   paper: Paper | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   folders: Folder[];
+  allPapers: Paper[];
   onRefresh: () => void;
 }
 
-export function EditPaperModal({ paper, open, onOpenChange, folders, onRefresh }: EditPaperModalProps) {
+export function EditPaperModal({ paper, open, onOpenChange, folders, allPapers, onRefresh }: EditPaperModalProps) {
   const [formData, setFormData] = useState<Partial<Paper>>({});
-  const [newTag, setNewTag] = useState('');
   
   useHotkeys('mod+enter', () => {
     if (open) handleSave();
@@ -58,21 +59,14 @@ export function EditPaperModal({ paper, open, onOpenChange, folders, onRefresh }
     }
   };
 
-  const addTag = () => {
-    if (!newTag.trim()) return;
-    const currentTags = formData.tags || [];
-    if (!currentTags.includes(newTag.trim())) {
-      setFormData({ ...formData, tags: [...currentTags, newTag.trim()] });
-    }
-    setNewTag('');
-  };
-
   const removeTag = (tag: string) => {
     setFormData({
       ...formData,
       tags: (formData.tags || []).filter(t => t !== tag)
     });
   };
+
+  const allExistingTags = Array.from(new Set(allPapers.flatMap(p => p.tags || []))).sort();
 
   if (!paper) return null;
 
@@ -184,26 +178,20 @@ export function EditPaperModal({ paper, open, onOpenChange, folders, onRefresh }
           </div>
 
           <div className="grid gap-2">
-            <label className="text-sm font-medium">Tags</label>
-            <div className="flex flex-wrap gap-2 mb-2">
-              {formData.tags?.map(tag => (
-                <Badge key={tag} variant="secondary" className="flex items-center gap-1 px-2 py-0.5">
-                  {tag}
-                  <X className="h-3 w-3 cursor-pointer" onClick={() => removeTag(tag)} />
-                </Badge>
-              ))}
-            </div>
-            <div className="flex gap-2">
-              <Input 
-                placeholder="Add tag..." 
-                value={newTag} 
-                onChange={(e) => setNewTag(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && addTag()}
-              />
-              <Button type="button" variant="outline" size="icon" onClick={addTag}>
-                <Plus className="h-4 w-4" />
-              </Button>
-            </div>
+            <label className="text-sm font-medium flex items-center gap-2">
+              <Tags className="h-4 w-4 opacity-50" /> Tags
+            </label>
+            <TagInput 
+              tags={formData.tags || []}
+              allExistingTags={allExistingTags}
+              onAddTag={(tag) => {
+                const currentTags = formData.tags || [];
+                if (!currentTags.includes(tag)) {
+                  setFormData({ ...formData, tags: [...currentTags, tag] });
+                }
+              }}
+              onRemoveTag={removeTag}
+            />
           </div>
 
           <div className="grid gap-2">

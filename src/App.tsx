@@ -23,7 +23,6 @@ type FilterType = {
 
 export default function App() {
   const [filter, setFilter] = useState<FilterType>({ type: 'all' });
-  const [searchQuery, setSearchQuery] = useState('');
   const [pasteModalOpen, setPasteModalOpen] = useState(false);
   const [papers, setPapers] = useState<Paper[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
@@ -58,15 +57,6 @@ export default function App() {
   }, { enableOnFormTags: false });
 
   const filteredPapers = papers.filter(p => {
-    // Search filter
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      const matchesSearch = p.title.toLowerCase().includes(q) || 
-        p.authors.some(a => a.toLowerCase().includes(q)) ||
-        p.conference?.toLowerCase().includes(q);
-      if (!matchesSearch) return false;
-    }
-
     // View filter
     if (filter.type === 'trash') return p.isTrashed;
     if (p.isTrashed) return false;
@@ -111,39 +101,33 @@ export default function App() {
     return 'Library';
   };
 
+  const getSidebarActiveFilter = () => {
+    if (filter.type === 'folder') return `folder-${filter.folderId}`;
+    return filter.type;
+  };
+
   return (
     <TooltipProvider>
       <SidebarProvider>
         <AppSidebar 
-          activeFilter={filter.type === 'folder' ? `folder-${filter.folderId}` : filter.type}
+          activeFilter={getSidebarActiveFilter()}
           onFilterChange={setFilter} 
           folders={folders}
+          papers={papers}
           onRefresh={refreshData}
         />
         <SidebarInset className="flex flex-col">
-          <header className="flex h-16 shrink-0 items-center justify-between gap-2 border-b px-6">
+          <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b px-6 bg-background">
             <div className="flex items-center gap-2">
               <SidebarTrigger className="-ml-1" />
-              <h2 className="text-lg font-semibold">{viewTitle()}</h2>
-              {papers && <span className="text-xs text-muted-foreground ml-2">({papers.length})</span>}
+              <div className="h-4 w-px bg-muted mx-2" />
+              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">{viewTitle()}</h2>
+              {papers && <span className="text-xs text-muted-foreground/50 font-mono ml-2">[{papers.length}]</span>}
             </div>
             
-            <div className="flex flex-1 max-w-md items-center gap-2 px-4">
-              <div className="relative w-full">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  type="search"
-                  placeholder="Search titles, authors, venues..."
-                  className="w-full bg-background pl-8"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Button onClick={() => setPasteModalOpen(true)}>
-                <Plus className="mr-2 h-4 w-4" />
+            <div className="flex items-center gap-3">
+              <Button size="sm" variant="default" onClick={() => setPasteModalOpen(true)} className="h-8 rounded-full shadow-sm hover:shadow-md transition-all">
+                <Plus className="mr-2 h-3.5 w-3.5" />
                 Add Paper
               </Button>
             </div>
@@ -166,6 +150,7 @@ export default function App() {
           open={pasteModalOpen} 
           onOpenChange={setPasteModalOpen} 
           folderId={filter.type === 'folder' ? filter.folderId : undefined}
+          allPapers={papers}
           onRefresh={refreshData}
         />
         <Toaster position="top-center" richColors />
