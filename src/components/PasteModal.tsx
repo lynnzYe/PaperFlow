@@ -4,24 +4,36 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { Loader2, Link as LinkIcon, FileText, Tags } from 'lucide-react';
-import { api, Paper } from '@/src/db';
+import { Loader2, Link as LinkIcon, Tags, Plus, X } from 'lucide-react';
+import { api, Paper, Folder } from '@/src/db';
 import bibtexParse from 'bibtex-parse-js';
 import { TagInput } from './TagInput';
+import { Badge } from '@/components/ui/badge';
+import { 
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuItem, 
+  DropdownMenuGroup,
+  DropdownMenuLabel, 
+  DropdownMenuSeparator, 
+  DropdownMenuTrigger 
+} from '@/components/ui/dropdown-menu';
 
 interface PasteModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   folderId?: number;
+  folders: Folder[];
   allPapers: Paper[];
   onRefresh: () => void;
 }
 
-export function PasteModal({ open, onOpenChange, folderId, allPapers, onRefresh }: PasteModalProps) {
+export function PasteModal({ open, onOpenChange, folderId, folders, allPapers, onRefresh }: PasteModalProps) {
   const [url, setUrl] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [extractedData, setExtractedData] = useState<any>(null);
-  const allExistingTags = Array.from(new Set(allPapers.flatMap(p => p.tags || []))).sort();
+  
+  const initFolders = folderId ? [folderId] : [];
   
   useHotkeys('mod+enter', () => {
     if (open) {
@@ -121,27 +133,24 @@ export function PasteModal({ open, onOpenChange, folderId, allPapers, onRefresh 
     setIsLoading(true);
     setExtractedData(null);
 
-    // Normalize ArXiv PDF URLs to abstract page for better parsing
     if (inputUrl.includes('arxiv.org/pdf/')) {
       inputUrl = inputUrl.replace('arxiv.org/pdf/', 'arxiv.org/abs/').replace('.pdf', '');
-      setUrl(inputUrl); // Update the state too
+      setUrl(inputUrl);
     }
 
-    // Check if it's BibTeX
-    if (inputUrl.startsWith('@')) {
-      const data = parseBibTeX(inputUrl);
-      if (data) {
-        setExtractedData(data);
-        toast.success('BibTeX metadata parsed!');
-      } else {
-        toast.error('Failed to parse BibTeX');
-      }
-      setIsLoading(false);
-      return;
-    }
-
-    // Otherwise treat as URL
     try {
+      if (inputUrl.startsWith('@')) {
+        const data = parseBibTeX(inputUrl);
+        if (data) {
+          setExtractedData({ ...data, folderIds: initFolders, tags: [] });
+          toast.success('BibTeX metadata parsed!');
+        } else {
+          toast.error('Failed to parse BibTeX');
+        }
+        setIsLoading(false);
+        return;
+      }
+
       const fetchResponse = await fetch('/api/fetch-url', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -152,7 +161,7 @@ export function PasteModal({ open, onOpenChange, folderId, allPapers, onRefresh 
       const { html } = await fetchResponse.json();
 
       const data = localParse(html, inputUrl);
-      setExtractedData(data);
+      setExtractedData({ ...data, folderIds: initFolders, tags: [] });
       if (!data.title) {
         toast.warning('Possible incomplete metadata. Please verify.');
       } else {
@@ -174,6 +183,8 @@ export function PasteModal({ open, onOpenChange, folderId, allPapers, onRefresh 
       conference: '',
       year: new Date().getFullYear(),
       abstract: '',
+      folderIds: initFolders,
+      tags: []
     });
   };
 
@@ -186,7 +197,6 @@ export function PasteModal({ open, onOpenChange, folderId, allPapers, onRefresh 
       await api.addPaper({
         ...extractedData,
         url,
-        folderId: folderId,
         isStarred: false,
         isTrashed: false,
       });
@@ -200,9 +210,11 @@ export function PasteModal({ open, onOpenChange, folderId, allPapers, onRefresh 
     }
   };
 
+  const allExistingTags = Array.from(new Set(allPapers?.flatMap(p => p.tags || []) || [])).sort();
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px]">
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add Paper</DialogTitle>
           <DialogDescription>
@@ -228,7 +240,7 @@ export function PasteModal({ open, onOpenChange, folderId, allPapers, onRefresh 
 
           {!extractedData && !isLoading && (
             <div className="flex justify-center flex-col gap-2">
-              <Button variant="ghost" size="sm" onClick={handleManualAdd}>
+              <Button variant="ghost" size="sm" onClick={handleManualAdd} className="text-xs">
                 Or enter details manually
               </Button>
             </div>
@@ -236,7 +248,7 @@ export function PasteModal({ open, onOpenChange, folderId, allPapers, onRefresh 
         </div>
 
         {extractedData && (
-          <div className="space-y-4 max-h-[400px] overflow-y-auto p-4 border rounded-lg bg-muted/30">
+          <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
             <div>
               <label className="text-xs font-semibold text-muted-foreground uppercase">Title</label>
               <Input 
@@ -246,7 +258,7 @@ export function PasteModal({ open, onOpenChange, folderId, allPapers, onRefresh 
               />
             </div>
             <div className="flex gap-4">
-              <div className="flex-2">
+              <div className="flex-1">
                 <label className="text-xs font-semibold text-muted-foreground uppercase">Citation Key</label>
                 <Input 
                   value={extractedData.citationKey || ''} 
@@ -254,7 +266,7 @@ export function PasteModal({ open, onOpenChange, folderId, allPapers, onRefresh 
                   className="mt-1"
                 />
               </div>
-              <div className="flex-1">
+              <div className="w-24">
                 <label className="text-xs font-semibold text-muted-foreground uppercase">Year</label>
                 <Input 
                   type="number"
@@ -280,6 +292,54 @@ export function PasteModal({ open, onOpenChange, folderId, allPapers, onRefresh 
                 className="mt-1"
               />
             </div>
+            
+            <div className="grid gap-2">
+              <label className="text-xs font-semibold text-muted-foreground uppercase">Folders</label>
+              <div className="flex flex-wrap gap-2 min-h-[38px] p-2 rounded-md border bg-background">
+                {extractedData.folderIds?.map((fid: number) => {
+                  const f = folders.find(fold => fold.id === fid);
+                  if (!f) return null;
+                  return (
+                    <Badge key={fid} variant="secondary" className="gap-1 bg-primary/10 text-primary hover:bg-primary/20 transition-colors py-0.5 px-2">
+                      {f.name}
+                      <button
+                        type="button"
+                        className="p-0.5 hover:text-destructive transition-colors outline-none cursor-pointer"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          setExtractedData({
+                            ...extractedData,
+                            folderIds: (extractedData.folderIds || []).filter((id: number) => id !== fid)
+                          });
+                        }}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  );
+                })}
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    render={(triggerProps) => (
+                      <Button {...triggerProps} variant="ghost" size="sm" className="h-6 px-2 text-[10px] gap-1 rounded-full border border-dashed">
+                        <Plus className="h-3 w-3" /> Add folder
+                      </Button>
+                    )}
+                  />
+                  <DropdownMenuContent align="start" className="w-[180px] z-[100]">
+                    <DropdownMenuGroup>
+                      {folders.filter(f => !extractedData.folderIds?.includes(f.id)).map(f => (
+                        <DropdownMenuItem key={f.id} onClick={() => setExtractedData({...extractedData, folderIds: [...(extractedData.folderIds || []), f.id]})}>
+                          📂 {f.name}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </div>
+
             <div>
               <label className="text-xs font-semibold text-muted-foreground uppercase flex items-center gap-2">
                 <Tags className="h-3 w-3" /> Tags
@@ -300,7 +360,7 @@ export function PasteModal({ open, onOpenChange, folderId, allPapers, onRefresh 
                       tags: (extractedData.tags || []).filter((t: string) => t !== tag)
                     });
                   }}
-                  placeholder="Categorize this paper..."
+                  placeholder="Add tags..."
                 />
               </div>
             </div>

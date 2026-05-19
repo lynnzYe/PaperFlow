@@ -37,7 +37,8 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
   DropdownMenuPortal,
-  DropdownMenuLabel,
+  DropdownMenuGroup,
+  DropdownMenuLabel, 
   DropdownMenuCheckboxItem
 } from '@/components/ui/dropdown-menu';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -103,10 +104,9 @@ export function PaperList({ papers, folders, isLoading, onRefresh, sortField, so
   const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>({
     star: true,
     title: true,
-    authors: true,
-    venue: true,
-    year: true,
+    folders: true,
     tags: true,
+    year: true,
     dateAdded: true,
     doi: false,
     actions: true
@@ -160,7 +160,7 @@ export function PaperList({ papers, folders, isLoading, onRefresh, sortField, so
           if (f.operator === 'less') return y <= v;
           return true;
         case 'folder':
-          return paper.folderId === parseInt(f.value);
+          return paper.folderIds?.includes(parseInt(f.value));
         case 'starred':
           return paper.isStarred === (f.value === 'true');
         case 'conference':
@@ -331,27 +331,31 @@ export function PaperList({ papers, folders, isLoading, onRefresh, sortField, so
             </Button>
 
             <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="h-9 gap-2 font-medium">
-                  <Settings2 className="h-4 w-4" />
-                  View
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuLabel className="text-xs font-semibold uppercase tracking-wider text-muted-foreground p-3">Show in table</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {Object.keys(visibleColumns).map((col) => (
-                  col !== 'star' && col !== 'title' && col !== 'actions' && (
-                    <DropdownMenuCheckboxItem
-                      key={col}
-                      checked={visibleColumns[col]}
-                      onCheckedChange={(checked) => setVisibleColumns(prev => ({ ...prev, [col]: checked }))}
-                      className="text-sm"
-                    >
-                      {col.charAt(0).toUpperCase() + col.slice(1).replace(/([A-Z])/g, ' $1')}
-                    </DropdownMenuCheckboxItem>
-                  )
-                ))}
+              <DropdownMenuTrigger
+                render={(triggerProps) => (
+                  <Button {...triggerProps} variant="ghost" size="sm" className="h-9 gap-2 font-medium">
+                    <Settings2 className="h-4 w-4" />
+                    View
+                  </Button>
+                )}
+              />
+              <DropdownMenuContent align="end" className="w-56 z-[100]">
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel className="text-xs font-semibold uppercase tracking-wider text-muted-foreground p-3">Show in table</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {Object.keys(visibleColumns).map((col) => (
+                    col !== 'star' && col !== 'title' && col !== 'actions' && (
+                      <DropdownMenuCheckboxItem
+                        key={col}
+                        checked={visibleColumns[col]}
+                        onCheckedChange={(checked) => setVisibleColumns(prev => ({ ...prev, [col]: checked }))}
+                        className="text-sm"
+                      >
+                        {col === 'dateAdded' ? 'Date Added' : col.charAt(0).toUpperCase() + col.slice(1).replace(/([A-Z])/g, ' $1')}
+                      </DropdownMenuCheckboxItem>
+                    )
+                  ))}
+                </DropdownMenuGroup>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -466,28 +470,25 @@ export function PaperList({ papers, folders, isLoading, onRefresh, sortField, so
               </TableHead>
               {visibleColumns.star && <TableHead className="w-[48px] px-0 border-r last:border-r-0"></TableHead>}
               <TableHead 
-                className="w-auto min-w-[280px] cursor-pointer hover:bg-muted/50 transition-colors border-r last:border-r-0" 
+                className="w-auto min-w-[350px] cursor-pointer hover:bg-muted/50 transition-colors border-r last:border-r-0" 
                 onClick={() => onSort('title')}
               >
                 <div className="flex items-center text-left gap-1 truncate font-semibold text-foreground">
-                  Title <SortIcon field="title" />
+                  Paper Info <SortIcon field="title" />
                 </div>
               </TableHead>
-              {visibleColumns.authors && (
-                <TableHead className="w-[180px] border-r last:border-r-0">Authors</TableHead>
+              {visibleColumns.folders && (
+                <TableHead className="w-[140px] border-r last:border-r-0">Folders</TableHead>
               )}
-              {visibleColumns.venue && (
-                <TableHead className="w-[140px] border-r last:border-r-0">Venue</TableHead>
+              {visibleColumns.tags && (
+                <TableHead className="w-[150px] border-r last:border-r-0">Tags</TableHead>
               )}
               {visibleColumns.year && (
-                <TableHead className="w-[80px] cursor-pointer hover:bg-muted/50 transition-colors text-center border-r last:border-r-0" onClick={() => onSort('year')}>
+                <TableHead className="w-[70px] cursor-pointer hover:bg-muted/50 transition-colors text-center border-r last:border-r-0" onClick={() => onSort('year')}>
                   <div className="flex items-center justify-center gap-1">
                     Year <SortIcon field="year" />
                   </div>
                 </TableHead>
-              )}
-              {visibleColumns.tags && (
-                <TableHead className="w-[150px] border-r last:border-r-0">Tags</TableHead>
               )}
               {visibleColumns.dateAdded && (
                 <TableHead className="w-[110px] cursor-pointer hover:bg-muted/50 transition-colors text-right pr-4 border-r last:border-r-0" onClick={() => onSort('createdAt')}>
@@ -535,7 +536,6 @@ export function PaperList({ papers, folders, isLoading, onRefresh, sortField, so
               </TableRow>
             ) : (
               filteredPapers.map((paper) => {
-                const folder = folders.find(f => f.id === paper.folderId);
                 const isSelected = selectedIds.has(paper.id);
                 
                 return (
@@ -582,53 +582,53 @@ export function PaperList({ papers, folders, isLoading, onRefresh, sortField, so
                       </TableCell>
                     )}
 
-                    <TableCell className="overflow-hidden py-2 align-middle border-r last:border-r-0">
-                      <div className="flex flex-col gap-0.5 min-w-0 pr-4">
-                        <span className="font-semibold text-sm leading-snug text-foreground/90 group-hover:text-primary transition-colors truncate" title={paper.title}>
+                    <TableCell className="overflow-hidden py-3 align-middle border-r last:border-r-0">
+                      <div className="flex flex-col gap-1 min-w-0 pr-4">
+                        <span className="font-bold text-[14.5px] leading-snug text-foreground group-hover:text-primary transition-colors line-clamp-2" title={paper.title}>
                           {paper.title}
                         </span>
-                        <div className="flex items-center gap-2">
-                          {folder && (
-                            <span className="text-[10px] text-primary font-bold flex items-center gap-1 leading-none">
-                              📂 {folder.name}
-                            </span>
-                          )}
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 opacity-80">
                           {paper.authors.length > 0 && (
-                            <span className="text-[11px] text-muted-foreground truncate leading-none">
-                              {paper.authors.length > 2 
-                                ? `${paper.authors[0]} et al.` 
+                            <span className="text-[13px] text-muted-foreground font-medium">
+                              {paper.authors.length > 3 
+                                ? `${paper.authors.slice(0, 3).join(', ')} et al.` 
                                 : paper.authors.join(', ')}
                             </span>
+                          )}
+                          {paper.conference && (
+                            <>
+                              <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
+                              <span className="text-[12px] text-muted-foreground italic font-medium truncate max-w-[200px]" title={paper.conference}>
+                                {paper.conference}
+                              </span>
+                            </>
                           )}
                         </div>
                       </div>
                     </TableCell>
 
-                    {visibleColumns.authors && (
-                      <TableCell className="text-[13px] text-muted-foreground align-middle border-r last:border-r-0">
-                        <span className="line-clamp-1">{paper.authors.join(', ')}</span>
-                      </TableCell>
-                    )}
-
-                    {visibleColumns.venue && (
-                      <TableCell className="text-[13px] align-middle border-r last:border-r-0">
-                        <span className="text-muted-foreground/80 font-medium truncate block italic" title={paper.conference || ''}>
-                          {paper.conference || '—'}
-                        </span>
-                      </TableCell>
-                    )}
-
-                    {visibleColumns.year && (
-                      <TableCell className="text-[13px] font-medium opacity-80 text-center align-middle border-r last:border-r-0">
-                        {paper.year || '—'}
+                    {visibleColumns.folders && (
+                      <TableCell className="align-middle border-r last:border-r-0">
+                        <div className="flex flex-wrap gap-1 max-w-[130px]">
+                          {paper.folderIds?.map(fid => {
+                            const f = folders.find(fold => fold.id === fid);
+                            if (!f) return null;
+                            return (
+                              <Badge key={fid} variant="outline" className="text-[10px] py-0 px-2 h-5 font-bold bg-primary/5 text-primary border-primary/20 shrink-0 truncate whitespace-nowrap max-w-full">
+                                {f.name}
+                              </Badge>
+                            );
+                          })}
+                          {(!paper.folderIds || paper.folderIds.length === 0) && <span className="text-muted-foreground/20 italic text-[11px]">No folders</span>}
+                        </div>
                       </TableCell>
                     )}
 
                     {visibleColumns.tags && (
                       <TableCell className="align-middle border-r last:border-r-0">
-                        <div className="flex flex-wrap gap-1 max-w-full">
+                        <div className="flex flex-wrap gap-1 max-w-[140px]">
                           {paper.tags?.slice(0, 3).map(tag => (
-                            <Badge key={tag} variant="secondary" className="text-[10px] py-0 px-1.5 h-4 font-normal bg-primary/[0.04] text-primary/70 border-none">
+                            <Badge key={tag} variant="secondary" className="text-[10px] py-0 px-1.5 h-4 font-normal bg-primary/[0.04] text-primary/70 border-none truncate max-w-full">
                               {tag}
                             </Badge>
                           ))}
@@ -637,6 +637,12 @@ export function PaperList({ papers, folders, isLoading, onRefresh, sortField, so
                           )}
                           {(!paper.tags || paper.tags.length === 0) && <span className="text-muted-foreground/20 italic text-[11px]">No tags</span>}
                         </div>
+                      </TableCell>
+                    )}
+
+                    {visibleColumns.year && (
+                      <TableCell className="text-[13px] font-medium opacity-80 text-center align-middle border-r last:border-r-0">
+                        {paper.year || '—'}
                       </TableCell>
                     )}
 
@@ -656,10 +662,17 @@ export function PaperList({ papers, folders, isLoading, onRefresh, sortField, so
                       <TableCell className="py-0 align-middle pr-2 last:border-r-0" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end">
                           <DropdownMenu>
-                            <DropdownMenuTrigger className="inline-flex items-center justify-center rounded-md transition-colors focus-visible:outline-none focus:bg-accent hover:bg-accent h-7 w-7 outline-none">
-                              <MoreHorizontal className="h-4 w-4 text-muted-foreground opacity-40 group-hover:opacity-100 transition-opacity" />
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-48 shadow-lg border-muted/50 p-1">
+                            <DropdownMenuTrigger
+                              render={(triggerProps) => (
+                                <button
+                                  {...triggerProps}
+                                  className="inline-flex items-center justify-center rounded-md transition-colors focus-visible:outline-none focus:bg-accent hover:bg-accent h-7 w-7 outline-none"
+                                >
+                                  <MoreHorizontal className="h-4 w-4 text-muted-foreground opacity-40 group-hover:opacity-100 transition-opacity" />
+                                </button>
+                              )}
+                            />
+                            <DropdownMenuContent align="end" className="w-48 shadow-lg border-muted/50 p-1 z-[100]">
                               <DropdownMenuItem onClick={() => setEditPaper(paper)} className="rounded-sm">
                                 <Pencil className="mr-2 h-4 w-4 opacity-70" /> Edit Metadata
                               </DropdownMenuItem>
@@ -716,13 +729,20 @@ export function PaperList({ papers, folders, isLoading, onRefresh, sortField, so
       <div className="fixed bottom-6 right-6 z-40">
         <TooltipProvider>
           <Tooltip>
-            <TooltipTrigger 
-              className="rounded-full h-10 w-10 shadow-lg bg-background border-2 border-primary/20 hover:border-primary transition-all inline-flex items-center justify-center p-0 cursor-pointer"
-              onClick={() => setShowHelp(true)}
-            >
-              <Keyboard className="h-5 w-5 text-primary" />
-            </TooltipTrigger>
-            <TooltipContent side="left" className="bg-primary text-primary-foreground border-none font-bold">
+            <TooltipTrigger
+              render={(triggerProps) => (
+                <Button
+                  {...triggerProps}
+                  variant="outline"
+                  size="icon"
+                  className="rounded-full h-10 w-10 shadow-lg bg-background border-2 border-primary/20 hover:border-primary transition-all p-0 cursor-pointer"
+                  onClick={() => setShowHelp(true)}
+                >
+                  <Keyboard className="h-5 w-5 text-primary" />
+                </Button>
+              )}
+            />
+            <TooltipContent side="left" className="bg-primary text-primary-foreground border-none font-bold z-[100]">
               Keyboard Shortcuts (?)
             </TooltipContent>
           </Tooltip>

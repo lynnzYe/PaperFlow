@@ -26,7 +26,7 @@ async function initDB() {
     console.warn("⚠️ No PostgreSQL configuration found. Backend features will fail.");
     return;
   }
-  
+
   try {
     const client = await pool.connect();
     console.log("Connected to PostgreSQL");
@@ -57,8 +57,25 @@ async function initDB() {
         citation_key TEXT,
         tags TEXT[] DEFAULT '{}'
       );
+
+      CREATE TABLE IF NOT EXISTS paper_folders (
+        paper_id INTEGER REFERENCES papers(id) ON DELETE CASCADE,
+        folder_id INTEGER REFERENCES folders(id) ON DELETE CASCADE,
+        PRIMARY KEY (paper_id, folder_id)
+      );
     `);
     console.log("Database tables checked/initialized");
+
+    // Migration: Move folder_id to paper_folders if column exists and paper_folders is empty
+    const checkCount = await client.query("SELECT COUNT(*) FROM paper_folders");
+    if (parseInt(checkCount.rows[0].count) === 0) {
+      console.log("Performing migration to paper_folders...");
+      await client.query(`
+        INSERT INTO paper_folders (paper_id, folder_id)
+        SELECT id, folder_id FROM papers WHERE folder_id IS NOT NULL
+        ON CONFLICT DO NOTHING
+      `);
+    }
 
     // Ensure columns exist (simple migration)
     const columns = [
@@ -156,7 +173,13 @@ async function startServer() {
   // Papers
   app.get("/api/papers", async (req, res) => {
     try {
-      const result = await pool.query("SELECT * FROM papers ORDER BY created_at DESC");
+      const result = await pool.query(`
+        SELECT p.*, COALESCE(array_agg(pf.folder_id) FILTER (WHERE pf.folder_id IS NOT NULL), '{}') as folder_ids
+        FROM papers p
+        LEFT JOIN paper_folders pf ON p.id = pf.paper_id
+        GROUP BY p.id
+        ORDER BY p.created_at DESC
+      `);
       // Map names to camelCase for the frontend
       const papers = result.rows.map(r => ({
         id: r.id,
@@ -166,7 +189,7 @@ async function startServer() {
         year: r.year,
         abstract: r.abstract,
         url: r.url,
-        folderId: r.folder_id,
+        folderIds: r.folder_ids || [],
         isStarred: r.is_starred,
         isTrashed: r.is_trashed,
         createdAt: parseInt(r.created_at),
@@ -185,52 +208,85 @@ async function startServer() {
 
   app.post("/api/papers", async (req, res) => {
     const p = req.body;
+    const client = await pool.connect();
     try {
-      const result = await pool.query(
-        `INSERT INTO papers (title, authors, conference, year, abstract, url, folder_id, is_starred, is_trashed, doi, bibtex, citation_key, tags)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING *`,
-        [p.title, p.authors, p.conference, p.year, p.abstract, p.url, p.folderId || null, p.isStarred || false, p.isTrashed || false, p.doi, p.bibtex, p.citationKey, p.tags || []]
+      await client.query('BEGIN');
+      const result = await client.query(
+        `INSERT INTO papers (title, authors, conference, year, abstract, url, is_starred, is_trashed, doi, bibtex, citation_key, tags)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
+        [p.title, p.authors, p.conference, p.year, p.abstract, p.url, p.isStarred || false, p.isTrashed || false, p.doi, p.bibtex, p.citationKey, p.tags || []]
       );
-      res.json(result.rows[0]);
+
+      const paperId = result.rows[0].id;
+      if (p.folderIds && p.folderIds.length > 0) {
+        for (const folderId of p.folderIds) {
+          await client.query("INSERT INTO paper_folders (paper_id, folder_id) VALUES ($1, $2)", [paperId, folderId]);
+        }
+      }
+
+      await client.query('COMMIT');
+      res.json({ ...result.rows[0], folderIds: p.folderIds || [] });
     } catch (err: any) {
+      await client.query('ROLLBACK');
       res.status(500).json({ error: err.message });
+    } finally {
+      client.release();
     }
   });
 
   app.patch("/api/papers/:id", async (req, res) => {
     const { id } = req.params;
     const updates = req.body;
-    
-    // Crude dynamic query builder
-    const entries = Object.entries(updates)
-      .filter(([k]) => k !== 'id' && k !== 'updatedAt' && k !== 'createdAt')
-      .map(([k, v], i) => {
-        const mapping: any = {
-          folderId: 'folder_id',
-          isStarred: 'is_starred',
-          isTrashed: 'is_trashed',
-          citationKey: 'citation_key'
-        };
-        return { field: mapping[k] || k, value: v, placeholder: `$${i + 1}` };
-      });
 
-    if (entries.length === 0) {
-      return res.json({ message: "No changes" });
-    }
-
-    const fields = entries.map(e => `${e.field} = ${e.placeholder}`);
-    const values = entries.map(e => e.value);
-
+    const client = await pool.connect();
     try {
-      const result = await pool.query(
-        `UPDATE papers SET ${fields.join(', ')}, updated_at = extract(epoch from now()) * 1000 WHERE id = $${entries.length + 1} RETURNING *`,
-        [...values, id]
-      );
-      if (result.rows.length === 0) return res.status(404).json({ error: "Paper not found" });
-      res.json(result.rows[0]);
+      await client.query('BEGIN');
+
+      if (updates.folderIds !== undefined) {
+        await client.query("DELETE FROM paper_folders WHERE paper_id = $1", [id]);
+        if (updates.folderIds && Array.isArray(updates.folderIds)) {
+          for (const folderId of updates.folderIds) {
+            await client.query("INSERT INTO paper_folders (paper_id, folder_id) VALUES ($1, $2)", [id, folderId]);
+          }
+        }
+        delete updates.folderIds;
+      }
+
+      // Crude dynamic query builder
+      const entries = Object.entries(updates)
+        .filter(([k]) => k !== 'id' && k !== 'updatedAt' && k !== 'createdAt')
+        .map(([k, v], i) => {
+          const mapping: any = {
+            isStarred: 'is_starred',
+            isTrashed: 'is_trashed',
+            citationKey: 'citation_key'
+          };
+          return { field: mapping[k] || k, value: v, placeholder: `$${i + 1}` };
+        });
+
+      let updatedRow = null;
+      if (entries.length > 0) {
+        const fields = entries.map(e => `${e.field} = ${e.placeholder}`);
+        const values = entries.map(e => e.value);
+        const result = await client.query(
+          `UPDATE papers SET ${fields.join(', ')}, updated_at = extract(epoch from now()) * 1000 WHERE id = $${entries.length + 1} RETURNING *`,
+          [...values, id]
+        );
+        updatedRow = result.rows[0];
+      } else {
+        const result = await client.query("SELECT * FROM papers WHERE id = $1", [id]);
+        updatedRow = result.rows[0];
+      }
+
+      await client.query('COMMIT');
+      if (!updatedRow) return res.status(404).json({ error: "Paper not found" });
+      res.json(updatedRow);
     } catch (err: any) {
+      await client.query('ROLLBACK');
       console.error("PATCH Error:", err);
       res.status(500).json({ error: err.message });
+    } finally {
+      client.release();
     }
   });
 

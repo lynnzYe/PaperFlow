@@ -17,8 +17,9 @@ import { Button } from '@/components/ui/button';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
 type FilterType = {
-  type: 'all' | 'starred' | 'trash' | 'folder';
+  type: 'all' | 'starred' | 'trash' | 'folder' | 'tag' | 'year';
   folderId?: number;
+  searchValue?: string;
 };
 
 export default function App() {
@@ -62,7 +63,9 @@ export default function App() {
     if (p.isTrashed) return false;
 
     if (filter.type === 'starred') return p.isStarred;
-    if (filter.type === 'folder') return p.folderId === filter.folderId;
+    if (filter.type === 'folder') return p.folderIds?.includes(filter.folderId || 0);
+    if (filter.type === 'tag') return p.tags?.includes(filter.searchValue || '');
+    if (filter.type === 'year') return p.year?.toString() === filter.searchValue;
     
     return true;
   }).sort((a, b) => {
@@ -98,11 +101,15 @@ export default function App() {
     if (filter.type === 'starred') return 'Starred';
     if (filter.type === 'trash') return 'Trash';
     if (filter.type === 'folder' && activeFolder) return activeFolder.name;
+    if (filter.type === 'tag') return `Tag: ${filter.searchValue}`;
+    if (filter.type === 'year') return `Year: ${filter.searchValue}`;
     return 'Library';
   };
 
   const getSidebarActiveFilter = () => {
     if (filter.type === 'folder') return `folder-${filter.folderId}`;
+    if (filter.type === 'tag') return `tag-${filter.searchValue}`;
+    if (filter.type === 'year') return `year-${filter.searchValue}`;
     return filter.type;
   };
 
@@ -150,6 +157,7 @@ export default function App() {
           open={pasteModalOpen} 
           onOpenChange={setPasteModalOpen} 
           folderId={filter.type === 'folder' ? filter.folderId : undefined}
+          folders={folders}
           allPapers={papers}
           onRefresh={refreshData}
         />

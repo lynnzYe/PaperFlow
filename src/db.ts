@@ -13,7 +13,7 @@ export interface Paper {
   year?: number;
   abstract?: string;
   url?: string;
-  folderId?: number;
+  folderIds: number[];
   isStarred: boolean;
   isTrashed: boolean;
   createdAt: number;
